@@ -49,8 +49,14 @@ func main() {
 	// Parse the request
 	startLine, _, err := parseRequest(string(requestBytes))
 
-	if startLine.Path == "/" {
-		_, err = conn.Write([]byte(okMessage))
+	if strings.HasPrefix(startLine.Path, "/echo/") {
+		// Echo the message
+		response, err := getResponse(startLine)
+		if err != nil {
+			fmt.Println("Fail to get response: ", err.Error())
+			os.Exit(1)
+		}
+		_, err = conn.Write([]byte(response))
 	} else {
 		_, err = conn.Write([]byte(notFoundMessage))
 	}
@@ -112,4 +118,24 @@ func ReadRequest(conn net.Conn) ([]byte, error) {
 		return buf[:n], nil
 	}
 	return buf, nil
+}
+
+func getResponse(startLine *StartLine) (string, error) {
+	if startLine.Path == "" {
+		return "", fmt.Errorf("empty path")
+	}
+	// parse the path
+	message := getMessage(startLine)
+	if message == "" {
+		return "", fmt.Errorf("empty message")
+	}
+	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(message), message), nil
+}
+
+func getMessage(startLine *StartLine) string {
+	splits := strings.Split(startLine.Path, "/")
+	if len(splits) == 3 {
+		return splits[2]
+	}
+	return ""
 }

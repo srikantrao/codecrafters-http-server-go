@@ -26,3 +26,15 @@ func TestHTTPRequest(t *testing.T) {
 	assert.Equal(t, headers["Host"], expectedHost, "expected %v actual %v", expectedHost, headers["Host"])
 	assert.Equal(t, headers["User-Agent"], expectedUserAgent, "expected %v actual %v", expectedUserAgent, headers["User-Agent"])
 }
+
+func TestEchoRequest(t *testing.T) {
+	requestStr := "GET /echo/abc HTTP/1.1\r\n\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1"
+	startLine, _, err := parseRequest(requestStr)
+	assert.Nil(t, err)
+	responseStr, err := getResponse(startLine)
+	assert.Nil(t, err)
+
+	//set up the expected result for the response string
+	assert.Equal(t, responseStr, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 3\r\n\r\nabc",
+		"expected %v actual %v", "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 3\r\n\r\nabc", responseStr)
+}
