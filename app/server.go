@@ -128,7 +128,7 @@ func postFileResponse(request *Request) (string, error) {
 	filePath := filepath.Join(*directory, filename)
 
 	// Write the contents of the request body at the specified filepath.
-	err := os.WriteFile(filePath, []byte(request.Body), 0644)
+	err := os.WriteFile(filePath, []byte(strings.TrimSpace(request.Body)), 0644)
 	if err != nil {
 		return "", err
 	}
@@ -196,7 +196,6 @@ func getRequest(lines []string) (*Request, error) {
 	}
 	// initialize the headers
 	headers := make(Headers)
-
 	// get the start line
 	words := strings.Split(lines[0], " ")
 	if len(words) != 3 {
@@ -206,10 +205,17 @@ func getRequest(lines []string) (*Request, error) {
 		Method:   words[0],
 		Path:     words[1],
 		Protocol: words[2],
+		Headers:  headers,
 	}
 
 	// get the headers and the body
-	for i, line := range lines[1:] {
+	var headersAndBody []string
+	if lines[1] == "" {
+		headersAndBody = lines[2:]
+	} else {
+		headersAndBody = lines[1:]
+	}
+	for i, line := range headersAndBody {
 		if line == "" {
 			// Headers and body are separated by an empty line
 			request.Body = strings.Join(lines[i+1:], "\r\n")
