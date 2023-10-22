@@ -49,7 +49,9 @@ func main() {
 	// Parse the request
 	startLine, _, err := parseRequest(string(requestBytes))
 
-	if strings.HasPrefix(startLine.Path, "/echo/") {
+	if startLine.Path == "/" {
+		_, err = conn.Write([]byte(okMessage))
+	} else if strings.HasPrefix(startLine.Path, "/echo/") {
 		// Echo the message
 		response, err := getResponse(startLine)
 		if err != nil {
@@ -60,15 +62,16 @@ func main() {
 	} else {
 		_, err = conn.Write([]byte(notFoundMessage))
 	}
+
 	if err != nil {
-		fmt.Println("Fail to write response: ", err.Error())
+		fmt.Println("failed to write response: ", err.Error())
 		os.Exit(1)
 	}
 }
 
 func parseRequest(request string) (*StartLine, Headers, error) {
 	if request == "" {
-		return nil, nil, fmt.Errorf("Empty string")
+		return nil, nil, fmt.Errorf("empty string")
 	}
 	lines := strings.Split(request, "\r\n")
 	if len(lines) == 0 {
