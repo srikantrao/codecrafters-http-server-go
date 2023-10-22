@@ -18,6 +18,14 @@ type StartLine struct {
 	Protocol string
 }
 
+type Request struct {
+	Method   string
+	Path     string
+	Protocol string
+	Body     string
+	Headers  Headers
+}
+
 type Headers map[string]string
 
 const (
@@ -63,9 +71,13 @@ func handleRequest(conn net.Conn) {
 
 func router(conn net.Conn, requestBytes []byte) {
 	// Parse the request
-	startLine, headers, err := parseRequest(string(requestBytes))
+	request, err := parseRequest(string(requestBytes))
+	if err != nil {
+		fmt.Println("Error parsing request: ", err.Error())
+		os.Exit(1)
+	}
 
-	response, err := getResponse(startLine, headers)
+	response, err := getResponse(request)
 
 	// write the response to the connection
 	_, err = conn.Write([]byte(response))
@@ -75,24 +87,31 @@ func router(conn net.Conn, requestBytes []byte) {
 	}
 }
 
-func getResponse(startLine *StartLine, headers Headers) (string, error) {
+func getResponse(request *Request) (string, error) {
 	var err error
 	var response string
-	if startLine.Path == "/" {
+	if request == nil {
+		return "", fmt.Errorf("empty request")
+	}
+	if request.Path == "/" {
 		response = okMessage
-	} else if strings.HasPrefix(startLine.Path, "/echo/") {
+	} else if strings.HasPrefix(request.Path, "/echo/") {
 		// Echo the message
-		response, err = getEchoResponse(startLine)
+		response, err = getEchoResponse(request.Path)
 		if err != nil {
 			fmt.Println("Fail to get response: ", err.Error())
 			os.Exit(1)
 		}
-	} else if strings.HasPrefix(startLine.Path, "/user-agent") && startLine.Method == http.MethodGet {
-		if userAgent, ok := headers["User-Agent"]; ok {
+	} else if strings.HasPrefix(request.Path, "/user-agent") && request.Method == http.MethodGet {
+		if userAgent, ok := request.Headers["User-Agent"]; ok {
 			response = getUserAgentResponse(userAgent)
 		}
-	} else if strings.HasPrefix(startLine.Path, "/files") && startLine.Method == http.MethodGet {
-		response, err = getFileResponse(startLine)
+	} else if strings.HasPrefix(request.Path, "/files") {
+		if request.Method == http.MethodGet {
+			response, err = getFileResponse(request.Path)
+		} else if request.Method == http.MethodPost {
+			response, err = postFileResponse(request)
+		}
 		if err != nil {
 			fmt.Println("Fail to get response: ", err.Error())
 			os.Exit(1)
@@ -103,9 +122,24 @@ func getResponse(startLine *StartLine, headers Headers) (string, error) {
 	return response, err
 }
 
-func getFileResponse(line *StartLine) (string, error) {
+func postFileResponse(request *Request) (string, error) {
 	// get the filename
-	filename := strings.TrimPrefix(line.Path, "/files/")
+	filename := strings.TrimPrefix(request.Path, "/files/")
+	filePath := filepath.Join(*directory, filename)
+
+	// Write the contents of the request body at the specified filepath.
+	err := os.WriteFile(filePath, []byte(request.Body), 0644)
+	if err != nil {
+		return "", err
+	}
+
+	// return a 201 OK response
+	return "HTTP/1.1 201 Created\r\n\r\n", nil
+}
+
+func getFileResponse(path string) (string, error) {
+	// get the filename
+	filename := strings.TrimPrefix(path, "/files/")
 	filePath := filepath.Join(*directory, filename)
 
 	// Check if the file exists
@@ -141,45 +175,53 @@ func getUserAgentResponse(agent string) string {
 	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(agent), agent)
 }
 
-func parseRequest(request string) (*StartLine, Headers, error) {
+func parseRequest(request string) (*Request, error) {
 	if request == "" {
-		return nil, nil, fmt.Errorf("empty string")
+		return nil, fmt.Errorf("empty string")
 	}
 	lines := strings.Split(request, "\r\n")
 	if len(lines) == 0 {
-		return nil, nil, fmt.Errorf("invalid request")
+		return nil, fmt.Errorf("invalid request")
 	}
-	startLine, err := getStartLine(lines[0])
+	r, err := getRequest(lines)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	headers := make(Headers)
-	if len(lines) > 1 {
-		headers = getHeaders(lines[1:])
-	}
-	return startLine, headers, nil
+	return r, nil
 }
 
-func getStartLine(line string) (*StartLine, error) {
-	if line == "" {
-		return nil, fmt.Errorf("empty string")
+func getRequest(lines []string) (*Request, error) {
+	if len(lines) == 0 {
+		return nil, fmt.Errorf("empty request")
 	}
-	words := strings.Split(line, " ")
-	if len(words) == 3 {
-		return &StartLine{words[0], words[1], words[2]}, nil
-	}
-	return nil, fmt.Errorf("invalid string")
-}
-
-func getHeaders(lines []string) Headers {
+	// initialize the headers
 	headers := make(Headers)
-	for _, line := range lines {
+
+	// get the start line
+	words := strings.Split(lines[0], " ")
+	if len(words) != 3 {
+		return nil, fmt.Errorf("invalid string")
+	}
+	request := &Request{
+		Method:   words[0],
+		Path:     words[1],
+		Protocol: words[2],
+	}
+
+	// get the headers and the body
+	for i, line := range lines[1:] {
+		if line == "" {
+			// Headers and body are separated by an empty line
+			request.Body = strings.Join(lines[i+1:], "\r\n")
+			break
+		}
 		before, after, ok := strings.Cut(line, ":")
 		if ok {
 			headers[strings.TrimSpace(before)] = strings.TrimSpace(after)
 		}
 	}
-	return headers
+	return request, nil
+
 }
 
 func readRequest(conn net.Conn) ([]byte, error) {
@@ -195,19 +237,19 @@ func readRequest(conn net.Conn) ([]byte, error) {
 	return buf, nil
 }
 
-func getEchoResponse(startLine *StartLine) (string, error) {
-	if startLine.Path == "" {
+func getEchoResponse(path string) (string, error) {
+	if path == "" {
 		return "", fmt.Errorf("empty path")
 	}
 	// parse the path
-	message := getMessage(startLine)
+	message := getMessage(path)
 	if message == "" {
 		return "", fmt.Errorf("empty message")
 	}
 	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(message), message), nil
 }
 
-func getMessage(startLine *StartLine) string {
-	splits := strings.Split(startLine.Path, "echo/")
+func getMessage(path string) string {
+	splits := strings.Split(path, "echo/")
 	return splits[len(splits)-1]
 }

@@ -8,30 +8,30 @@ import (
 
 func TestHTTPRequest(t *testing.T) {
 	requestStr := "GET /index.html HTTP/1.1\r\n\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1"
-	startLine, headers, err := parseRequest(requestStr)
+	request, err := parseRequest(requestStr)
 	assert.Nil(t, err)
 
 	// set up the expected result for the start line
 	expectedMethod := http.MethodGet
 	expectedPath := "/index.html"
 	expectedProtocol := "HTTP/1.1"
-	assert.Equal(t, startLine.Method, expectedMethod, "http method does not match")
-	assert.Equal(t, startLine.Path, expectedPath, "expected %v actual %v", expectedPath, startLine.Path)
-	assert.Equal(t, startLine.Protocol, expectedProtocol, "expected %v actual %v", expectedProtocol, startLine.Protocol)
+	assert.Equal(t, request.Method, expectedMethod, "http method does not match")
+	assert.Equal(t, request.Path, expectedPath, "expected %v actual %v", expectedPath, request.Path)
+	assert.Equal(t, request.Protocol, expectedProtocol, "expected %v actual %v", expectedProtocol, request.Protocol)
 
 	// set up the expected result for the headers
 	expectedHost := "localhost:4221"
 	expectedUserAgent := "curl/7.64.1"
 
-	assert.Equal(t, headers["Host"], expectedHost, "expected %v actual %v", expectedHost, headers["Host"])
-	assert.Equal(t, headers["User-Agent"], expectedUserAgent, "expected %v actual %v", expectedUserAgent, headers["User-Agent"])
+	assert.Equal(t, request.Headers["Host"], expectedHost, "expected %v actual %v", expectedHost, request.Headers["Host"])
+	assert.Equal(t, request.Headers["User-Agent"], expectedUserAgent, "expected %v actual %v", expectedUserAgent, request.Headers["User-Agent"])
 }
 
 func TestEchoRequest(t *testing.T) {
 	requestStr := "GET /echo/abc HTTP/1.1\r\n\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1"
-	startLine, _, err := parseRequest(requestStr)
+	request, err := parseRequest(requestStr)
 	assert.Nil(t, err)
-	responseStr, err := getEchoResponse(startLine)
+	responseStr, err := getEchoResponse(request.Path)
 	assert.Nil(t, err)
 
 	//set up the expected result for the response string
@@ -41,9 +41,9 @@ func TestEchoRequest(t *testing.T) {
 
 func TestUserAgentRequest(t *testing.T) {
 	requestStr := "GET /user-agent HTTP/1.1\r\n\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1"
-	_, headers, err := parseRequest(requestStr)
+	request, err := parseRequest(requestStr)
 	assert.Nil(t, err)
-	responseStr := getUserAgentResponse(headers["User-Agent"])
+	responseStr := getUserAgentResponse(request.Headers["User-Agent"])
 	assert.Nil(t, err)
 
 	expectedResponse := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\ncurl/7.64.1"
@@ -54,9 +54,9 @@ func TestUserAgentRequest(t *testing.T) {
 
 func TestUserAgentRequest2(t *testing.T) {
 	requestStr := "GET /user-agent HTTP/1.1\r\n\r\nHost: localhost:4221\r\nUser-Agent: humpty/vanilla-dumpty\r\nAccept-Encoding: gzip"
-	startLine, headers, err := parseRequest(requestStr)
+	request, err := parseRequest(requestStr)
 	assert.Nil(t, err)
-	response, err := getResponse(startLine, headers)
+	response, err := getResponse(request)
 	assert.Nil(t, err)
 
 	expectedResponse := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 21\r\n\r\nhumpty/vanilla-dumpty"
