@@ -8,9 +8,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	// Uncomment this block to pass the first stage
-	// "net"
-	// "os"
 )
 
 type StartLine struct {
@@ -29,27 +26,32 @@ const (
 func main() {
 
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
+	defer l.Close()
 	if err != nil {
 		fmt.Println("Failed to bind to port 4221")
 		os.Exit(1)
 	}
+	for {
+		// accept a new connection...
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
+		go handleRequest(conn)
 
-	conn, err := l.Accept()
-	defer l.Close()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
 	}
-	defer conn.Close()
 
+}
+
+func handleRequest(conn net.Conn) {
+	defer conn.Close()
 	// Read the request string
 	requestBytes, err := readRequest(conn)
 	if err != nil {
 		fmt.Println("Error reading request: ", err.Error())
 	}
-
 	router(conn, requestBytes)
-
 }
 
 func router(conn net.Conn, requestBytes []byte) {

@@ -10,7 +10,10 @@ module github.com/codecrafters-io/http-server-starter-go
 
 go 1.19
 
-require github.com/stretchr/testify v1.8.4
+require (
+	github.com/google/uuid v1.3.1
+	github.com/stretchr/testify v1.8.4
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
