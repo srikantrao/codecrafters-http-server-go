@@ -31,7 +31,7 @@ func TestEchoRequest(t *testing.T) {
 	requestStr := "GET /echo/abc HTTP/1.1\r\n\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1"
 	startLine, _, err := parseRequest(requestStr)
 	assert.Nil(t, err)
-	responseStr, err := getResponse(startLine)
+	responseStr, err := getEchoResponse(startLine)
 	assert.Nil(t, err)
 
 	//set up the expected result for the response string

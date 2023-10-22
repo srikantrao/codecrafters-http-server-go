@@ -53,7 +53,7 @@ func main() {
 		_, err = conn.Write([]byte(okMessage))
 	} else if strings.HasPrefix(startLine.Path, "/echo/") {
 		// Echo the message
-		response, err := getResponse(startLine)
+		response, err := getEchoResponse(startLine)
 		if err != nil {
 			fmt.Println("Fail to get response: ", err.Error())
 			os.Exit(1)
@@ -123,7 +123,7 @@ func ReadRequest(conn net.Conn) ([]byte, error) {
 	return buf, nil
 }
 
-func getResponse(startLine *StartLine) (string, error) {
+func getEchoResponse(startLine *StartLine) (string, error) {
 	if startLine.Path == "" {
 		return "", fmt.Errorf("empty path")
 	}
@@ -136,9 +136,6 @@ func getResponse(startLine *StartLine) (string, error) {
 }
 
 func getMessage(startLine *StartLine) string {
-	splits := strings.Split(startLine.Path, "/")
-	if len(splits) == 3 {
-		return splits[2]
-	}
-	return ""
+	splits := strings.Split(startLine.Path, "echo/")
+	return splits[len(splits)-1]
 }
