@@ -2,11 +2,13 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -23,8 +25,13 @@ const (
 	notFoundMessage = "HTTP/1.1 404 Not Found\r\n\r\n"
 )
 
+var (
+	directory = flag.String("directory", ".", "the directory to look for the files specified")
+)
+
 func main() {
 
+	flag.Parse()
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	defer l.Close()
 	if err != nil {
@@ -84,10 +91,50 @@ func getResponse(startLine *StartLine, headers Headers) (string, error) {
 		if userAgent, ok := headers["User-Agent"]; ok {
 			response = getUserAgentResponse(userAgent)
 		}
+	} else if strings.HasPrefix(startLine.Path, "/files") && startLine.Method == http.MethodGet {
+		response, err = getFileResponse(startLine)
+		if err != nil {
+			fmt.Println("Fail to get response: ", err.Error())
+			os.Exit(1)
+		}
 	} else {
 		response = notFoundMessage
 	}
 	return response, err
+}
+
+func getFileResponse(line *StartLine) (string, error) {
+	// get the filename
+	filename := strings.TrimPrefix(line.Path, "/files/")
+	filePath := filepath.Join(*directory, filename)
+
+	// Check if the file exists
+	_, err := os.Stat(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// The file does not exist.
+			return notFoundMessage, nil
+		} else {
+			// An error occurred while checking if the file exists.
+			return "", err
+		}
+	}
+
+	// Open the file
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	// Read the contents of the file.
+	contents, err := io.ReadAll(f)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n%s", len(contents), contents), nil
+
 }
 
 func getUserAgentResponse(agent string) string {
