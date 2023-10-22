@@ -38,3 +38,29 @@ func TestEchoRequest(t *testing.T) {
 	assert.Equal(t, responseStr, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 3\r\n\r\nabc",
 		"expected %v actual %v", "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 3\r\n\r\nabc", responseStr)
 }
+
+func TestUserAgentRequest(t *testing.T) {
+	requestStr := "GET /user-agent HTTP/1.1\r\n\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1"
+	_, headers, err := parseRequest(requestStr)
+	assert.Nil(t, err)
+	responseStr := getUserAgentResponse(headers["User-Agent"])
+	assert.Nil(t, err)
+
+	expectedResponse := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\ncurl/7.64.1"
+	//set up the expected result for the response string
+	assert.Equal(t, responseStr, expectedResponse,
+		"expected %v actual %v", expectedResponse, responseStr)
+}
+
+func TestUserAgentRequest2(t *testing.T) {
+	requestStr := "GET /user-agent HTTP/1.1\r\n\r\nHost: localhost:4221\r\nUser-Agent: humpty/vanilla-dumpty\r\nAccept-Encoding: gzip"
+	startLine, headers, err := parseRequest(requestStr)
+	assert.Nil(t, err)
+	response, err := getResponse(startLine, headers)
+	assert.Nil(t, err)
+
+	expectedResponse := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 21\r\n\r\nhumpty/vanilla-dumpty"
+	//set up the expected result for the response string
+	assert.Equal(t, response, expectedResponse,
+		"expected %v actual %v", expectedResponse, response)
+}

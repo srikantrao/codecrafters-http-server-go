@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 	// Uncomment this block to pass the first stage
@@ -42,31 +43,53 @@ func main() {
 	defer conn.Close()
 
 	// Read the request string
-	requestBytes, err := ReadRequest(conn)
+	requestBytes, err := readRequest(conn)
 	if err != nil {
 		fmt.Println("Error reading request: ", err.Error())
 	}
+
+	router(conn, requestBytes)
+
+}
+
+func router(conn net.Conn, requestBytes []byte) {
 	// Parse the request
-	startLine, _, err := parseRequest(string(requestBytes))
+	startLine, headers, err := parseRequest(string(requestBytes))
 
-	if startLine.Path == "/" {
-		_, err = conn.Write([]byte(okMessage))
-	} else if strings.HasPrefix(startLine.Path, "/echo/") {
-		// Echo the message
-		response, err := getEchoResponse(startLine)
-		if err != nil {
-			fmt.Println("Fail to get response: ", err.Error())
-			os.Exit(1)
-		}
-		_, err = conn.Write([]byte(response))
-	} else {
-		_, err = conn.Write([]byte(notFoundMessage))
-	}
+	response, err := getResponse(startLine, headers)
 
+	// write the response to the connection
+	_, err = conn.Write([]byte(response))
 	if err != nil {
 		fmt.Println("failed to write response: ", err.Error())
 		os.Exit(1)
 	}
+}
+
+func getResponse(startLine *StartLine, headers Headers) (string, error) {
+	var err error
+	var response string
+	if startLine.Path == "/" {
+		response = okMessage
+	} else if strings.HasPrefix(startLine.Path, "/echo/") {
+		// Echo the message
+		response, err = getEchoResponse(startLine)
+		if err != nil {
+			fmt.Println("Fail to get response: ", err.Error())
+			os.Exit(1)
+		}
+	} else if strings.HasPrefix(startLine.Path, "/user-agent") && startLine.Method == http.MethodGet {
+		if userAgent, ok := headers["User-Agent"]; ok {
+			response = getUserAgentResponse(userAgent)
+		}
+	} else {
+		response = notFoundMessage
+	}
+	return response, err
+}
+
+func getUserAgentResponse(agent string) string {
+	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(agent), agent)
 }
 
 func parseRequest(request string) (*StartLine, Headers, error) {
@@ -110,7 +133,7 @@ func getHeaders(lines []string) Headers {
 	return headers
 }
 
-func ReadRequest(conn net.Conn) ([]byte, error) {
+func readRequest(conn net.Conn) ([]byte, error) {
 	buf := make([]byte, 102400)
 	n, err := conn.Read(buf)
 	// error that is not EOF
